@@ -648,8 +648,10 @@ def preprocess_weights_tl2(
                          two_weight,
                          final_weight)
     weight = np.array(final_weight, dtype=np.uint8).reshape(-1)
-    weight = np.pad(weight, (0, (K - 256) * M // 3 * 5 // 8 + 256 * M // 2 * 4 // 8 -
-                             weight.shape[0]), mode='constant', constant_values=0)
+    pad_nums = (K - 256) * M // 3 * 5 // 8 + 256 * M // 2 * 4 // 8
+    pad_align_nums = 32 - ((K - 256) * M // 3 * 5 // 8 + 256 * M // 2 * 4 // 8) % 32
+    pad_nums = pad_nums + pad_align_nums
+    weight = np.pad(weight, (0, pad_nums - weight.shape[0]), mode='constant', constant_values=0)
     return weight
 
 def transform_to_tl1(x: np.ndarray):
