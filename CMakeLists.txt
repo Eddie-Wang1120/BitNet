@@ -24,12 +24,16 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 # override ggml options
 set(GGML_BITNET_ARM_TL1    ${BITNET_ARM_TL1})
 set(GGML_BITNET_X86_TL2    ${BITNET_X86_TL2})
+set(GGML_BITNET_FLOAT      ${BITNET_FLOAT})
 
 if (GGML_BITNET_ARM_TL1)
     add_compile_definitions(GGML_BITNET_ARM_TL1)
 endif()
 if (GGML_BITNET_X86_TL2)
     add_compile_definitions(GGML_BITNET_X86_TL2)
+endif()
+if (GGML_BITNET_FLOAT)
+    add_compile_definitions(GGML_BITNET_FLOAT)
 endif()
 
 find_package(Threads REQUIRED)
