@@ -1,10 +1,7 @@
-import pandas as pd
-import langdetect
 import os
 import re
 import argparse
 import platform
-from operator import xor
 
 # all weights irrelevant to ternary weights was set to fp32
 # if interested in float32 output, please run
@@ -35,9 +32,9 @@ def system_info():
 
 def file_location(arch, file):
     if arch == "x86_64":
-        return "./build/bin/Release/{}.exe".format(file)
+        return os.path.join(".\\build\\bin\\Release", "{}.exe".format(file))
     elif arch == "arm64":
-        return "./build/bin/{}".format(file)
+        return os.path.join("./build/bin/", file)
 
 def setup_gguf():
     _, arch = system_info()
@@ -49,42 +46,18 @@ def setup_gguf():
     os.system("{} --token-embedding-type f32 ./models/bitnet_b1_58-large/ggml-model-f32.gguf ./models/bitnet_b1_58-large/ggml-model-tq10.gguf TQ1_0".format(file_location(arch, "llama-quantize")))
 
 def setup_data():
-    prompt_set = set()
     prompt_list = []
-
-    use_file = (args.prompt_file != "")
-    use_dataset = (args.dataset_dir != "")
-
-    if use_file:
-        with open(args.prompt_file, "r", encoding='utf-8', errors='ignore') as file:
-            for line in file:
-                if line == '\n':
-                    continue
-                line = line.replace("\n", "")
-                prompt_list.append(line)
-    elif use_dataset:
-        data = pd.read_parquet(os.path.join(args.dataset_dir, "data/train-00000-of-00014.parquet"))
-        data = data[data['country'] == 'United States'][data['language'] == 'English']
-        data_list = data['conversation'].to_list()
-        for arr in data_list:
-            for data in arr:
-                tokens = data['content']
-                if "\n" not in tokens:
-                    prompt_set.add(tokens)
-
+    with open(args.prompt_file, "r", encoding='utf-8', errors='ignore') as file:
         idx = 0
-        for prompt in prompt_set:
+        for line in file:
             if idx >= args.data_num:
                 break
-            if len(prompt) > 100:
+            if line == '\n':
                 continue
-            try:
-                if langdetect.detect(str(prompt)) == 'en':
-                    idx = idx + 1
-                    prompt_list.append(prompt)
-            except:
-                print(prompt)
-                print("no feature")
+            idx = idx + 1
+            line = line.replace("\n", "")
+            prompt_list.append(line)
+
     return prompt_list
 
 def generate_data(prompt_list):
@@ -111,17 +84,23 @@ def generate_data(prompt_list):
             file.write("\n")
 
     for prompt in prompt_list:
+        prompt = str(prompt).replace("\\", "\\\\")
+        prompt = str(prompt).replace("\"", "\\\"")
         system_code = "{0} -m ./models/bitnet_b1_58-large/ggml-model-{1}.gguf \
-            -b 1 -t 1 -n {4} -ngl 0 --seed {3} -p \"{2}\"" \
-            .format(file_location(arch, "llama-cli") ,args.kernel1, prompt, str(args.seed), str(args.token_num))
+            -b 1 -t {5} -n {4} -ngl 0 --seed {3} -p \"{2}\"" \
+            .format(file_location(arch, "llama-cli") ,args.kernel1, prompt, str(args.seed)
+                    , str(args.token_num), str(args.thread1))
         os.system(system_code)
     os.rename(os.path.join("results", "generate_result.txt"),
               os.path.join("results", "{}.txt".format(args.kernel1)))
 
     for prompt in prompt_list:
+        prompt = str(prompt).replace("\\", "\\\\")
+        prompt = str(prompt).replace("\"", "\\\"")
         system_code = "{0} -m ./models/bitnet_b1_58-large/ggml-model-{1}.gguf \
-            -b 1 -t 1 -n {4} -ngl 0 --seed {3} -p \"{2}\"" \
-            .format(file_location(arch, "llama-cli"), args.kernel2, prompt, str(args.seed), str(args.token_num))
+            -b 1 -t {5} -n {4} -ngl 0 --seed {3} -p \"{2}\"" \
+            .format(file_location(arch, "llama-cli"), args.kernel2, prompt, str(args.seed)
+                    , str(args.token_num), str(args.thread2))
         os.system(system_code)
     os.rename(os.path.join("results", "generate_result.txt"),
               os.path.join("results", "{}.txt".format(args.kernel2)))
@@ -185,6 +164,9 @@ def count_results(prompt_list):
             file.write(prompt)
             file.write("\n")
 
+    print("total: {}".format(str(total_test)))
+    print("right: {}".format(str(right_test)))
+    print("wrong: {}".format(str(wrong_test)))
     print("accuracy: {}".format(float(right_test) / float(total_test)))
 
 def fresh_env():
@@ -195,9 +177,6 @@ def fresh_env():
         os.remove("".join([dir_path, '/', file]))
 
 def main():
-    use_file = (args.prompt_file != "")
-    use_dataset = (args.dataset_dir != "")
-    assert(xor(use_file, use_dataset)), "only accept one data source"
     fresh_env()
     setup_gguf()
     prompt_list = setup_data()
@@ -210,10 +189,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description='compare outputs')
     parser.add_argument("--kernel1", "-k1", type=str, choices=SUPPORTED_QUANT_TYPES[arch])
     parser.add_argument("--kernel2", "-k2", type=str, choices=SUPPORTED_QUANT_TYPES[arch])
+    parser.add_argument("--thread1", "-t1", type=int, default=4)
+    parser.add_argument("--thread2", "-t2", type=int, default=4)
     parser.add_argument("--data-num", "-n", type=int, default=5, help="compare data num")
     parser.add_argument("--model", "-m", type=str, choices=["bitnet_b1_58-large"], help="right now only suits for bitnet_b1_58-large")
-    parser.add_argument("--prompt-file", "-f", type=str, default="", help="prompt file")
-    parser.add_argument("--dataset-dir", "-d", type=str, default="", help="dataset dir")
+    parser.add_argument("--prompt-file", "-f", type=str, default="./prompt/WildChat-1M.txt", help="prompt file")
     parser.add_argument("--seed", "-s", type=int, default=0, help="seed")
     parser.add_argument("--token-num", "-t", type=int, default=100, help="number of generate tokens")
     return parser.parse_args()
