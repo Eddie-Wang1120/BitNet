@@ -816,7 +816,7 @@ The wedding was 70s themed
 another
 what antispetics and disinfectants are good to test on
 write a script about the central intercollegiate athletic association  in kansas
-the code is not written in proper matlab format, can you fix that
+the code is not written in proper matlab format, can you fix that in a proper way?
 company's name "My North" target everyone, clothes, toys and food
 write a script about a society where arkansas is in conference usa
 2012? Hasn't that already assed
