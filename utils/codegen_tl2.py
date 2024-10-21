@@ -5,6 +5,7 @@ from configparser import ConfigParser
 def gen_ctor_code():
     kernel_code = "\n\
 #include \"ggml-bitnet.h\"\n\
+#include \"ggml-cpu-impl.h\"\n\
 #include <cstring>\n\
 #include <immintrin.h>\n\
 #define GGML_BITNET_MAX_NODES 8192\n\
@@ -623,7 +624,7 @@ def gen_top_api(kernel_shapes, k_list):
     kernel_code = "".join([kernel_code, "}\n"])
     return kernel_code
 
-def gen_transform_code(kernel_shapes):
+def gen_transform_code(kernel_shapes, fp16):
     kernel_code = "\n\
 void ggml_bitnet_transform_tensor(struct ggml_tensor * tensor) {\n\
     if (!(is_type_supported(tensor->type) && tensor->backend == GGML_BACKEND_TYPE_CPU && tensor->extra == nullptr)) {\n\
@@ -659,8 +660,18 @@ void ggml_bitnet_transform_tensor(struct ggml_tensor * tensor) {\n\
     int nbytes = (k - 256) * m / 3 * 5 / 8 + 256 * m / 2 * 4 / 8;\n\
     nbytes = 32 - nbytes % 32 + nbytes;\n\
     float * i2_scales = (float * )(qweights + nbytes);\n\
-    scales[0] = (bitnet_float_type) i2_scales[0];\n\
-\n\
+\n"])
+
+    if fp16:
+        kernel_code = "".join([kernel_code, "\
+    ggml_fp16_t* fp16_scale = (ggml_fp16_t *)aligned_malloc(sizeof(ggml_fp16_t));\n\
+    fp16_scale[0] = GGML_FP32_TO_FP16(i2_scales[0]);\n\
+    scales[0] = (bitnet_float_type) GGML_FP16_TO_FP32(fp16_scale[0]);\n"])
+    else:
+        kernel_code = "".join([kernel_code, "\
+    scales[0] = (bitnet_float_type) i2_scales[0];\n"])
+
+    kernel_code = "".join([kernel_code, "\n\
     tensor->extra = bitnet_tensor_extras + bitnet_tensor_extras_index;\n\
     bitnet_tensor_extras[bitnet_tensor_extras_index++] = {\n\
         /* .lut_scales_size = */ lut_scales_size,\n\
@@ -702,6 +713,7 @@ if __name__ == "__main__":
                         help="block length when cutting one weight (M, K) into K / BK weights (M, BK).")
     parser.add_argument('--bm',default="input", type=str,
                         help="using simd instructions to compute (bm, 192 / bm) in one block")
+    parser.add_argument('--fp16', action="store_true", help="convert scale to fp16")
     args = parser.parse_args()
 
     kernel_shapes = ModelShapeDict[args.model]
@@ -730,7 +742,7 @@ if __name__ == "__main__":
 
     ctor_code = gen_ctor_code()
     api_code = gen_top_api(kernel_shapes, k_list)
-    trans_code = gen_transform_code(kernel_shapes)
+    trans_code = gen_transform_code(kernel_shapes, args.fp16)
 
     output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "include")
 

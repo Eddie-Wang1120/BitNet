@@ -9,8 +9,8 @@ import platform
 # with the same -p and --seed, i2_s/tl1/tl2/f32 shows exactly the same outputs.
 
 SUPPORTED_QUANT_TYPES = {
-    "arm64": ["i2_s", "tl1", "tq10", "tq20", "f32"],
-    "x86_64": ["i2_s", "tl2", "tq10", "tq20", "f32"]
+    "arm64": ["i2_s", "tl1", "tq10", "tq20", "f32", "f16"],
+    "x86_64": ["i2_s", "tl2", "tq10", "tq20", "f32", "f16"]
 }
 
 ARCH_ALIAS = {
@@ -36,14 +36,18 @@ def file_location(arch, file):
     elif arch == "arm64":
         return os.path.join("./build/bin/", file)
 
-def setup_gguf():
+def setup_gguf(base_float):
     _, arch = system_info()
     tl_name = TL_NAME[arch]
-    os.system("python setup_env.py -md ./models/bitnet_b1_58-large -q {} -fa".format(tl_name))
-    os.system("python utils/convert-hf-to-gguf-bitnet.py ./models/bitnet_b1_58-large --outtype f32")
-    os.system("{} --token-embedding-type f32 ./models/bitnet_b1_58-large/ggml-model-f32.gguf ./models/bitnet_b1_58-large/ggml-model-i2_s.gguf I2_S 1".format(file_location(arch, "llama-quantize")))
-    os.system("{} --token-embedding-type f32 ./models/bitnet_b1_58-large/ggml-model-f32.gguf ./models/bitnet_b1_58-large/ggml-model-tq20.gguf TQ2_0".format(file_location(arch, "llama-quantize")))
-    os.system("{} --token-embedding-type f32 ./models/bitnet_b1_58-large/ggml-model-f32.gguf ./models/bitnet_b1_58-large/ggml-model-tq10.gguf TQ1_0".format(file_location(arch, "llama-quantize")))
+    if base_float == "f32":
+        os.system("python setup_env.py -md ./models/bitnet_b1_58-large -q {} -f32".format(tl_name))
+        os.system("python utils/convert-hf-to-gguf-bitnet.py ./models/bitnet_b1_58-large --outtype f32")
+    elif base_float == "f16":
+        os.system("python setup_env.py -md ./models/bitnet_b1_58-large -q {} -f16".format(tl_name))
+        os.system("python utils/convert-hf-to-gguf-bitnet.py ./models/bitnet_b1_58-large --outtype f16")
+    os.system("{0} --token-embedding-type f32 ./models/bitnet_b1_58-large/ggml-model-{1}.gguf ./models/bitnet_b1_58-large/ggml-model-i2_s.gguf I2_S 1".format(file_location(arch, "llama-quantize"), base_float))
+    os.system("{0} --token-embedding-type f32 ./models/bitnet_b1_58-large/ggml-model-{1}.gguf ./models/bitnet_b1_58-large/ggml-model-tq20.gguf TQ2_0".format(file_location(arch, "llama-quantize"), base_float))
+    os.system("{0} --token-embedding-type f32 ./models/bitnet_b1_58-large/ggml-model-{1}.gguf ./models/bitnet_b1_58-large/ggml-model-tq10.gguf TQ1_0".format(file_location(arch, "llama-quantize"), base_float))
 
 def setup_data():
     prompt_list = []
@@ -177,8 +181,15 @@ def fresh_env():
         os.remove("".join([dir_path, '/', file]))
 
 def main():
+    use_f32 = (args.kernel1 == "f32" or args.kernel2 == "f32")
+    use_f16 = (args.kernel1 == "f16" or args.kernel2 == "f16")
+    assert(not (use_f32 and use_f16))
+    base_float = "f16"
+    if use_f32:
+        base_float = "f32"
+
     fresh_env()
-    setup_gguf()
+    setup_gguf(base_float)
     prompt_list = setup_data()
     assert(len(prompt_list) == args.data_num)
     generate_data(prompt_list)
