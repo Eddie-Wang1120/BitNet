@@ -184,9 +184,9 @@ def main():
     use_f32 = (args.kernel1 == "f32" or args.kernel2 == "f32")
     use_f16 = (args.kernel1 == "f16" or args.kernel2 == "f16")
     assert(not (use_f32 and use_f16))
-    base_float = "f16"
-    if use_f32:
-        base_float = "f32"
+    base_float = "f32"
+    if use_f16:
+        base_float = "f16"
 
     fresh_env()
     setup_gguf(base_float)

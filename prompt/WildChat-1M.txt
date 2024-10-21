@@ -515,7 +515,7 @@ Please list the lyrics of "The Elements" by Tom Lehrer
 can you create output_dict = counts, that works for every combination of letters?
 associate professor
 what did you notice about the lotion of the elements in #3
-Thank!
+Thanks for your help
 is cocaine sugar
 Should I use Google Pay or Google Wallet?
 what happened in the korean war
